@@ -87,7 +87,7 @@ func (upstream *mpxRemote) wakeUpLoop() {
 			go upstream.Close()
 		}
 
-		if time.Now().Sub(upstream.lastOP) > UPSTREAM_KEEPALIVE {
+		if time.Now().Sub(upstream.lastOP) > UPSTREAM_KEEPALIVE*10 {
 			mpxStatLog.Println("NOOP Inactivity", upstream)
 			go upstream.Close()
 		}
