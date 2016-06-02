@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	_ "net/http/pprof"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,8 +36,8 @@ var reverse = &httputil.ReverseProxy{
 				if strings.HasSuffix(req.Host, suffix) {
 					req.Host = req.Host[0 : len(req.Host)-len(suffix)]
 				}
-				if strings.HasSuffix(req.Host, suffix+":"+strconv.Itoa(*httpPort)) {
-					req.Host = req.Host[0 : len(req.Host)-len(suffix+":"+strconv.Itoa(*httpPort))]
+				if strings.HasSuffix(req.Host, suffix+":"+httpPort) {
+					req.Host = req.Host[0 : len(req.Host)-len(suffix+":"+httpPort)]
 				}
 			}
 		}
