@@ -40,6 +40,8 @@ var reverse = &httputil.ReverseProxy{
 					req.Host = req.Host[0 : len(req.Host)-len(suffix+":"+httpPort)]
 				}
 			}
+		} else {
+			req.Host = fwdHost
 		}
 		req.URL.Scheme = "http"
 		req.URL.Host = req.Host
@@ -49,6 +51,7 @@ var reverse = &httputil.ReverseProxy{
 var httpPort = os.Getenv("HTTP_PORT")
 var skyPort = os.Getenv("SKYNET_PORT")
 var fwdHost = os.Getenv("FWD_HOST")
+var srvId = os.Getenv("SERVICE_ID")
 
 func main() {
 	if skyPort == "" {
@@ -59,6 +62,12 @@ func main() {
 	}
 	skynet.Services()
 
+	var skyL, skyLErr = skynet.Bind("", srvId)
+	if skyLErr != nil {
+		log.Panicln(skyLErr)
+	}
+
+	go http.Serve(skyL, reverse)
 	go func() {
 		if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
 			log.Panicln(srvErr)
