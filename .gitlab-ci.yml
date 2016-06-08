@@ -25,19 +25,6 @@ run_tests:
   script:
     - echo "tests skipped __ $commit_hash __"
 
-push_to_remote_registry:
-  stage: push_and_deploy
-  only:
-    - master
-  script:
-    - VERSION=b${CI_BUILD_ID}
-    - docker login -u hotcore -p hotcore -e none docker.hotcore.in
-    - for v in ${VERSION} latest;do \
-    - docker tag -f ${build_tag} ${REGISTRY_URL}/${project}:${v}; \
-    - docker push ${REGISTRY_URL}/${project}:${v}; \
-    - docker rmi -f ${REGISTRY_URL}/${project}:${v}; \
-    - done
-
 push_to_registry:
   stage: push_and_deploy
   only:
