@@ -23,7 +23,7 @@ run_tests:
   only:
     - master
   script:
-
+    - echo "tests skipped __ $commit_hash __"
 
 push_to_remote_registry:
   stage: push_and_deploy
