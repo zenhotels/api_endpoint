@@ -514,6 +514,14 @@ func (mpx *multiplexer) p2pNotifyLoop(upstream *mpxRemote, distance int) {
 		op.Data.Bytes = []byte(name)
 		return op
 	}
+	if distance == 1 && upstream.rAddr != nil {
+		var op = Op{
+			Cmd:   OP_RHOST,
+			Local: mpx.local,
+		}
+		op.Data.Bytes = []byte(upstream.rAddr.String())
+		go upstream.Send(op)
+	}
 
 	if mpx.cfg.NoServer {
 		return
@@ -964,6 +972,20 @@ func (mpx *multiplexer) IOLoopReader(upstream *mpxRemote) error {
 			} else {
 				services.Pop(service)
 			}
+			continue
+		case OP_RHOST:
+			var sName = string(job.Data.Bytes)
+			var host, _, hpErr = net.SplitHostPort(sName)
+			if hpErr != nil {
+				mpxStatLog.Println("Broken OP_RHOST command", sName)
+				continue
+			}
+			mpx.lAddrLock.Lock()
+			if !mpx.lhosts[host] {
+				mpx.lhosts[host] = true
+				mpx.lNew.Broadcast()
+			}
+			mpx.lAddrLock.Unlock()
 			continue
 		}
 

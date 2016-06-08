@@ -62,6 +62,7 @@ const (
 	OP_NO_SERVICE           = 199
 	OP_NO_OP                = 200
 	OP_JOIN_ME              = 201
+	OP_RHOST                = 202
 )
 
 type Stream struct {
