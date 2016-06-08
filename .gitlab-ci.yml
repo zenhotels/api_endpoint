@@ -1,0 +1,58 @@
+before_script:
+    - build_tag=ci-$CI_PROJECT_ID-$CI_BUILD_REF
+    - project=${CI_PROJECT_DIR##*/}
+    - export REGISTRYS="docker.hotcore.in/releases"
+    - docker info
+
+stages:
+    - build
+    - test
+    - push_and_deploy
+    - cleanup
+
+build_image:
+    stage: build
+    script:
+    - commit_hash=$CI_BUILD_REF
+    - echo "vcs build number __ $commit_hash __"
+    - echo "vcs build branch __ $CI_BUILD_REF_NAME __"
+    - docker build --force-rm=true --rm=true --pull=true -t ${build_tag} .
+
+run_tests:
+  stage: test
+  only:
+    - master
+  script:
+
+
+push_to_remote_registry:
+  stage: push_and_deploy
+  only:
+    - master
+  script:
+    - VERSION=b${CI_BUILD_ID}
+    - docker login -u hotcore -p hotcore -e none docker.hotcore.in
+    - for v in ${VERSION} latest;do \
+    - docker tag -f ${build_tag} ${REGISTRY_URL}/${project}:${v}; \
+    - docker push ${REGISTRY_URL}/${project}:${v}; \
+    - docker rmi -f ${REGISTRY_URL}/${project}:${v}; \
+    - done
+
+push_to_registry:
+  stage: push_and_deploy
+  only:
+    - master
+  script:
+    - VERSION=b${CI_BUILD_ID}
+    - for i in ${REGISTRYS}; do \
+    - docker tag -f ${build_tag} ${i}/${project}:latest; \
+    - docker tag ${build_tag} ${i}/${project}:$VERSION; \
+    - docker push ${i}/${project}:latest; \
+    - docker push ${i}/${project}:$VERSION; \
+    - done
+    - echo "Deploy complete with build $VERSION"
+
+remove_build_images:
+  stage: cleanup
+  script:
+    - docker rmi --force ${build_tag}
