@@ -793,7 +793,7 @@ func (mpx *multiplexer) farAwayLoop() {
 			}
 			for upstream := range vLoc {
 				var init = vHostDial[vHost]
-				go func() {
+				go func(vHost uint64, upstream *mpxRemote) {
 					init.Do(func() {
 						var remoteConn, remoteConnErr = mpx.dialTimeout("", Uint2Host(vHost)+":0", upstream, time.Second*10)
 						upstream.SendTimeout(remoteConn.Op(OP_NEW, nil), 0)
@@ -805,7 +805,7 @@ func (mpx *multiplexer) farAwayLoop() {
 						mpx.dNew.Broadcast()
 					})
 					*init = sync.Once{}
-				}()
+				}(vHost, upstream)
 				break
 			}
 		}

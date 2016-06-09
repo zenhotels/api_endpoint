@@ -1,4 +1,4 @@
-FROM golang:1.6
+FROM golang:1.7
 
 WORKDIR /go/src/apps.hotcore.in/api_endpoint
 ADD . /go/src/apps.hotcore.in/api_endpoint
