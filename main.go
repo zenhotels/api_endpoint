@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"os"
-
+	"fmt"
+	"github.com/satori/go.uuid"
 	"hotcore.in/skynet/skyapi"
+	"os"
+	"encoding/binary"
 )
 
 var skynet = skyapi.SkyNet.New()
@@ -43,6 +45,19 @@ var reverse = &httputil.ReverseProxy{
 		} else {
 			req.Host = fwdHost
 		}
+
+		var session = req.URL.Query().Get("session")
+		if session != "" {
+			var sessuid, decErr = uuid.FromString(session)
+			if decErr != nil {
+				req.Host = fmt.Sprintf(
+					"%s:%d",
+					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes())),
+					13337,
+				)
+			}
+		}
+
 		req.URL.Scheme = "http"
 		req.URL.Host = req.Host
 	},
