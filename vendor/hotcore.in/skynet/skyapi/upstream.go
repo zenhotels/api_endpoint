@@ -45,9 +45,11 @@ func (upstream *mpxRemote) init() *mpxRemote {
 	upstream.tasker = time.NewTicker(time.Millisecond * 100)
 	upstream.deadlines = make(map[int][]*sync.Cond)
 	upstream.lastDlCheck = upstream.nowStep()
+	upstream.dLock.Lock()
 	upstream.lastIOReq = time.Now()
 	upstream.lastIODone = time.Now()
 	upstream.lastOP = time.Now()
+	upstream.dLock.Unlock()
 	go upstream.wakeUpLoop()
 	return upstream
 }
@@ -117,7 +119,9 @@ func (upstream *mpxRemote) SendTimeout(op Op, t time.Duration) (err error) {
 	if t != 0 {
 		upstream.wdeadline = time.Now().Add(t)
 	}
+	upstream.dLock.Lock()
 	upstream.lastIOReq = time.Now()
+	upstream.dLock.Unlock()
 
 	switch op.Cmd {
 	case OP_NEW, OP_SYN, OP_ACK:
@@ -177,7 +181,9 @@ func (upstream *mpxRemote) IOLoopWriter() error {
 		if wErr := w.Flush(); wErr != nil {
 			return wErr
 		}
+		upstream.dLock.Lock()
 		upstream.lastIODone = time.Now()
+		upstream.dLock.Unlock()
 		upstream.wLock.Lock()
 	}
 	upstream.wLock.Unlock()

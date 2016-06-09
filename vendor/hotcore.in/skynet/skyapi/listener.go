@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,13 +17,13 @@ type Listener struct {
 	lport    uint32
 	hostname string
 	hostport string
-	postfix string
+	postfix  string
 
 	opQueue []Op
 	opLock  sync.Mutex
 	opNew   sync.Cond
 
-	closed  bool
+	closed  uint32
 	service ServiceId
 
 	mpx *multiplexer
@@ -43,7 +44,8 @@ func (self *Listener) init() *Listener {
 
 func (self *Listener) recv(op Op) {
 	self.opLock.Lock()
-	if !self.closed {
+	var closed = atomic.LoadUint32(&self.closed)
+	if closed == 0 {
 		self.opQueue = append(self.opQueue, op)
 	}
 	self.opLock.Unlock()
@@ -53,7 +55,7 @@ func (self *Listener) recv(op Op) {
 func (self *Listener) Close() error {
 	self.mpx.bLock.Lock()
 	delete(self.mpx.binds, self.lport)
-	self.closed = true
+	atomic.StoreUint32(&self.closed, 1)
 	self.mpx.bLock.Unlock()
 	if self.hostname != "" {
 		self.mpx.services.Pop(self.service)
@@ -82,7 +84,8 @@ func (self *Listener) Accept() (conn net.Conn, err error) {
 	var op Op
 	self.opLock.Lock()
 	for {
-		if self.closed {
+		var closed = atomic.LoadUint32(&self.closed)
+		if closed > 0 {
 			err = io.EOF
 			break
 		}

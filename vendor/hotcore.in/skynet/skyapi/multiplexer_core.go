@@ -98,6 +98,7 @@ type multiplexer struct {
 
 	discovered map[discoverLoc]bool
 	dLock      sync.RWMutex
+	dNew       sync.Cond
 
 	lhosts    map[string]bool
 	lports    map[string]bool
@@ -122,6 +123,7 @@ func (mpx *multiplexer) init() {
 		mpx.streams = make(map[uint32]*Stream)
 		mpx.binds = make(map[uint32]*Listener)
 		mpx.discovered = make(map[discoverLoc]bool)
+		mpx.dNew.L = &mpx.dLock
 		mpx.lPort = 1 << 24
 		mpx.joined = make(map[string]bool)
 		mpx.MaxDistance = 3
@@ -139,6 +141,7 @@ func (mpx *multiplexer) init() {
 
 		mpx.iohandler()
 
+		go mpx.farAwayLoop()
 		go mpx.cleanupLoop()
 		go mpx.routesWatcher()
 		go mpx.serviceWatcher()
@@ -557,10 +560,12 @@ func (mpx *multiplexer) cleanupLoop() {
 		mpx.sLock.RLock()
 		for sId, stream := range mpx.streams {
 			nowConn++
+			stream.sLock.Lock()
 			if stream.status&OP_CLOSED > 0 {
 				nowConn--
 				streamCleanupList = append(streamCleanupList, sId)
 			}
+			stream.sLock.Unlock()
 		}
 		mpx.sLock.RUnlock()
 		var step2 = time.Now()
@@ -700,6 +705,9 @@ func (mpx *multiplexer) Join(network, address string) error {
 	retry.MaxElapsedTime = time.Hour * 4
 	retry.MaxInterval = time.Minute * 5
 	var ticker = backoff.NewTicker(retry)
+	if lErr != nil {
+		return lErr
+	}
 	go func() {
 		for range ticker.C {
 			if lErr == nil {
@@ -713,9 +721,6 @@ func (mpx *multiplexer) Join(network, address string) error {
 		}
 	}()
 
-	if lErr != nil {
-		return lErr
-	}
 	return nil
 }
 
@@ -751,60 +756,79 @@ func (mpx *multiplexer) iohandler() {
 	}()
 }
 
+func (mpx *multiplexer) farAwayLoop() {
+	var vHostDial = map[uint64]*sync.Once{}
+	var vHostLoc = map[uint64]map[*mpxRemote]bool{}
+
+	mpx.dLock.Lock()
+	for {
+		var cleanup = []discoverLoc{}
+		var upstreamCleanup = map[*mpxRemote]bool{}
+		for loc := range mpx.discovered {
+			if loc.upstream.IsClosed() {
+				cleanup = append(cleanup, loc)
+				upstreamCleanup[loc.upstream] = true
+				continue
+			}
+			if vHostLoc[loc.Host] == nil {
+				vHostLoc[loc.Host] = map[*mpxRemote]bool{}
+			}
+			vHostLoc[loc.Host][loc.upstream] = true
+		}
+		for _, cI := range cleanup {
+			delete(mpx.discovered, cI)
+		}
+
+		var vHostCleanup = []uint64{}
+		for vHost, vLoc := range vHostLoc {
+			for upstream := range upstreamCleanup {
+				delete(vLoc, upstream)
+			}
+			if len(vLoc) == 0 {
+				vHostCleanup = append(vHostCleanup, vHost)
+				continue
+			}
+			if vHostDial[vHost] == nil {
+				vHostDial[vHost] = new(sync.Once)
+			}
+			for upstream := range vLoc {
+				var init = vHostDial[vHost]
+				go func() {
+					init.Do(func() {
+						var remoteConn, remoteConnErr = mpx.dialTimeout("", Uint2Host(vHost)+":0", upstream, time.Second*10)
+						upstream.SendTimeout(remoteConn.Op(OP_NEW, nil), 0)
+						if remoteConnErr != nil {
+							mpxStatLog.Println("Error while discovering", Uint2Host(vHost))
+						} else {
+							mpx.attachDistance(remoteConn, 3)
+						}
+						mpx.dNew.Broadcast()
+					})
+					*init = sync.Once{}
+				}()
+				break
+			}
+		}
+
+		for _, vH := range vHostCleanup {
+			delete(vHostLoc, vH)
+		}
+
+		mpx.dNew.Wait()
+	}
+	mpx.dLock.Unlock()
+}
+
 func (mpx *multiplexer) discover(upstream *mpxRemote, host uint64, distance int) {
 	if mpx.cfg.NoClient {
 		return
 	}
 	var loc = discoverLoc{host, upstream}
 	mpx.dLock.Lock()
-	var discovered = mpx.discovered[loc]
-	if !discovered {
+	if !mpx.discovered[loc] {
 		mpx.discovered[loc] = true
+		mpx.dNew.Broadcast()
 	}
-	mpx.dLock.Unlock()
-	if discovered {
-		return
-	}
-
-	var iter = mpx.routes.Iter()
-	for {
-		iter = iter.Next()
-		if upstream.IsClosed() {
-			return
-		}
-		var routeFound = mpx.findRouteTimeout(host, distance, time.Millisecond*100)
-		if routeFound != nil {
-			continue
-		}
-		loc = discoverLoc{host, nil}
-		mpx.dLock.Lock()
-		var discovered = mpx.discovered[loc]
-		if !discovered {
-			mpx.discovered[loc] = true
-		}
-		mpx.dLock.Unlock()
-		if !discovered {
-			break
-		}
-	}
-
-	var remoteConn, remoteConnErr = mpx.dialTimeout("", Uint2Host(host)+":0", upstream, time.Second*10)
-	upstream.SendTimeout(remoteConn.Op(OP_NEW, nil), 0)
-	if remoteConnErr != nil {
-		mpxStatLog.Println("Error while discovering", Uint2Host(host))
-	} else {
-		var joinedAt = time.Now()
-		mpxLog.Println("Discovered faraway host", Uint2Host(host))
-		mpx.attachDistance(remoteConn, 3)
-		var disconnectedAt = time.Now()
-
-		if disconnectedAt.Sub(joinedAt) > time.Minute*2 {
-			go mpx.discover(upstream, host, distance)
-		}
-	}
-	mpx.dLock.Lock()
-	delete(mpx.discovered, discoverLoc{host, upstream})
-	delete(mpx.discovered, discoverLoc{host, nil})
 	mpx.dLock.Unlock()
 }
 
@@ -910,7 +934,9 @@ func (mpx *multiplexer) IOLoopReader(upstream *mpxRemote) error {
 			return dataErr
 		}
 
+		upstream.dLock.Lock()
 		upstream.lastOP = time.Now()
+		upstream.dLock.Unlock()
 
 		//mpxLog.Println(job)
 		switch job.Cmd {
@@ -934,7 +960,7 @@ func (mpx *multiplexer) IOLoopReader(upstream *mpxRemote) error {
 			}
 			if job.Cmd == OP_DISCOVER {
 				if distance == 2 {
-					go mpx.discover(upstream, service.Host, distance)
+					mpx.discover(upstream, service.Host, distance)
 				} else {
 					mpx.routes.Push(service)
 					routes.Push(service, func() {

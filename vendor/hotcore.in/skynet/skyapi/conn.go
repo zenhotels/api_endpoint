@@ -122,7 +122,6 @@ func (self *Stream) recv(op Op) {
 	self.sLock.Lock()
 	self.status = self.status | op.Cmd
 	self.state.Broadcast()
-	self.sLock.Unlock()
 
 	switch self.status {
 	case OP_NEW:
@@ -132,6 +131,7 @@ func (self *Stream) recv(op Op) {
 	case OP_ACK:
 		go self.mpx.Send(self.Op(OP_SYN_ACK, nil))
 	}
+	self.sLock.Unlock()
 }
 
 func (self *Stream) data(op Op) {
