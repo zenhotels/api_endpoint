@@ -10,7 +10,7 @@
 		{
 			"importpath": "hotcore.in/skynet/skyapi",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"revision": "449f86f745913d63fe79c1d63314d2f7ab6f047f",
+			"revision": "f68dc421a7c71c4a2ab4a2ca9def87c449796e2f",
 			"branch": "master",
 			"path": "/skyapi"
 		},

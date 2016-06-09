@@ -375,13 +375,13 @@ func (mpx *multiplexer) discoverLoop(upstream *mpxRemote, distance int) {
 		op.Data.Bytes = []byte{byte(distance)}
 		return op
 	}
-	if mpx.cfg.NoServer {
-		return
-	}
 	upstream.SendTimeout(
 		discoveryMsg(mpx.local, distance),
 		0,
 	)
+	if mpx.cfg.NoServer {
+		return
+	}
 
 	var forEach RegistryStorage
 	var iter = mpx.routes.Iter()
@@ -461,10 +461,6 @@ func (mpx *multiplexer) routesWatcher() {
 	var forEach RegistryStorage
 	var iter = mpx.routes.Iter()
 
-	if mpx.cfg.NoServer {
-		return
-	}
-
 	for {
 		iter = iter.Next()
 		forEach.Sync(&mpx.routes, func(s ServiceId) {
@@ -484,10 +480,6 @@ func (mpx *multiplexer) routesWatcher() {
 func (mpx *multiplexer) serviceWatcher() {
 	var forEach RegistryStorage
 	var iter = mpx.services.Iter()
-
-	if mpx.cfg.NoServer {
-		return
-	}
 
 	for {
 		iter = iter.Next()
