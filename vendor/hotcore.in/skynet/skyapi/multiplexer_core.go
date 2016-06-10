@@ -595,6 +595,7 @@ func (mpx *multiplexer) attachDistance(conn io.ReadWriter, distance int) {
 	var remote = (&mpxRemote{reader: reader, writer: writer}).init()
 
 	if c, ok := conn.(net.Conn); ok {
+		mpxLog.Println("Join", c.RemoteAddr().String())
 		remote.lAddr = c.LocalAddr()
 		remote.rAddr = c.RemoteAddr()
 	}
@@ -703,20 +704,18 @@ func (mpx *multiplexer) Join(network, address string) error {
 
 	var retry = backoff.NewExponentialBackOff()
 	retry.MaxElapsedTime = time.Hour * 4
-	retry.MaxInterval = time.Minute * 5
+	retry.MaxInterval = time.Minute
 	var ticker = backoff.NewTicker(retry)
-	if lErr != nil {
-		return lErr
-	}
+
 	go func() {
 		for range ticker.C {
 			if lErr == nil {
 				mpx.localHostDiscover(l.LocalAddr())
 				mpx.Attach(l)
 				retry.Reset()
+			} else {
+				mpxLog.Println("Could not join", network, address)
 			}
-			mpxLog.Println("detached")
-
 			l, lErr = net.Dial(network, address)
 		}
 	}()
@@ -757,8 +756,9 @@ func (mpx *multiplexer) iohandler() {
 }
 
 func (mpx *multiplexer) farAwayLoop() {
-	var vHostDial = map[uint64]*sync.Once{}
+	var vHostDial = map[uint64]chan bool{}
 	var vHostLoc = map[uint64]map[*mpxRemote]bool{}
+	var vHostDialLock sync.Mutex
 
 	mpx.dLock.Lock()
 	for {
@@ -780,6 +780,7 @@ func (mpx *multiplexer) farAwayLoop() {
 		}
 
 		var vHostCleanup = []uint64{}
+		vHostDialLock.Lock()
 		for vHost, vLoc := range vHostLoc {
 			for upstream := range upstreamCleanup {
 				delete(vLoc, upstream)
@@ -789,11 +790,12 @@ func (mpx *multiplexer) farAwayLoop() {
 				continue
 			}
 			if vHostDial[vHost] == nil {
-				vHostDial[vHost] = new(sync.Once)
+				vHostDial[vHost] = make(chan bool, 1)
 			}
 			for upstream := range vLoc {
-				go func(init *sync.Once, vHost uint64, upstream *mpxRemote) {
-					init.Do(func() {
+				select {
+				case vHostDial[vHost] <- true:
+					go func(vHost uint64, upstream *mpxRemote) {
 						var remoteConn, remoteConnErr = mpx.dialTimeout("", Uint2Host(vHost)+":0", upstream, time.Second*10)
 						upstream.SendTimeout(remoteConn.Op(OP_NEW, nil), 0)
 						if remoteConnErr != nil {
@@ -802,9 +804,12 @@ func (mpx *multiplexer) farAwayLoop() {
 							mpx.attachDistance(remoteConn, 3)
 						}
 						mpx.dNew.Broadcast()
-					})
-					*init = sync.Once{}
-				}(vHostDial[vHost], vHost, upstream)
+						vHostDialLock.Lock()
+						<-vHostDial[vHost]
+						vHostDialLock.Unlock()
+					}(vHost, upstream)
+				default:
+				}
 				break
 			}
 		}
@@ -812,6 +817,7 @@ func (mpx *multiplexer) farAwayLoop() {
 		for _, vH := range vHostCleanup {
 			delete(vHostLoc, vH)
 		}
+		vHostDialLock.Unlock()
 
 		mpx.dNew.Wait()
 	}
@@ -959,7 +965,7 @@ func (mpx *multiplexer) IOLoopReader(upstream *mpxRemote) error {
 			}
 			if job.Cmd == OP_DISCOVER {
 				if distance == 2 {
-					mpx.discover(upstream, service.Host, distance)
+					go mpx.discover(upstream, service.Host, distance)
 				} else {
 					mpx.routes.Push(service)
 					routes.Push(service, func() {

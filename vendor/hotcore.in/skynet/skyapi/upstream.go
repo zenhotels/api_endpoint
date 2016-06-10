@@ -86,12 +86,12 @@ func (upstream *mpxRemote) wakeUpLoop() {
 
 		if upstream.lastIOReq.Sub(upstream.lastIODone) > UPSTREAM_KEEPALIVE {
 			mpxStatLog.Println("lastIO Inactivity")
-			go upstream.Close()
+			upstream.closeForced()
 		}
 
 		if time.Now().Sub(upstream.lastOP) > UPSTREAM_KEEPALIVE*10 {
 			mpxStatLog.Println("NOOP Inactivity", upstream)
-			go upstream.Close()
+			upstream.closeForced()
 		}
 
 		for i := upstream.lastDlCheck; i < upstream.nowStep(); i++ {
@@ -115,13 +115,14 @@ func (upstream *mpxRemote) wakeUpLoop() {
 }
 
 func (upstream *mpxRemote) SendTimeout(op Op, t time.Duration) (err error) {
+	upstream.dLock.Lock()
+	upstream.lastIOReq = time.Now()
+	upstream.dLock.Unlock()
+
 	upstream.wLock.Lock()
 	if t != 0 {
 		upstream.wdeadline = time.Now().Add(t)
 	}
-	upstream.dLock.Lock()
-	upstream.lastIOReq = time.Now()
-	upstream.dLock.Unlock()
 
 	switch op.Cmd {
 	case OP_NEW, OP_SYN, OP_ACK:
@@ -197,8 +198,17 @@ func (upstream *mpxRemote) Send(op Op) (err error) {
 func (upstream *mpxRemote) Close() {
 	upstream.wLock.Lock()
 	upstream.wClosed = true
-	upstream.wLock.Unlock()
+	upstream.wdeadline = time.Now().Add(time.Second)
 	upstream.wNew.Broadcast()
+	upstream.wLock.Unlock()
+}
+
+func (upstream *mpxRemote) closeForced() {
+	upstream.wLock.Lock()
+	upstream.wClosed = true
+	upstream.wdeadline = time.Now()
+	upstream.wNew.Broadcast()
+	upstream.wLock.Unlock()
 }
 
 func (upstream *mpxRemote) IsClosed() bool {
