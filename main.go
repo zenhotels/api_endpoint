@@ -16,7 +16,7 @@ import (
 	"encoding/binary"
 )
 
-var skynet = skyapi.SkyNet.New()
+var skynet = skyapi.SkyNet.Client().New()
 var reverse = &httputil.ReverseProxy{
 	Transport: &http.Transport{
 		Dial: func(lnet, laddr string) (net.Conn, error) {
@@ -49,10 +49,10 @@ var reverse = &httputil.ReverseProxy{
 		var session = req.URL.Query().Get("session")
 		if session != "" {
 			var sessuid, decErr = uuid.FromString(session)
-			if decErr != nil {
+			if decErr == nil {
 				req.Host = fmt.Sprintf(
 					"%s:%d",
-					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes())),
+					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
 					13337,
 				)
 			}
