@@ -78,6 +78,7 @@ func (upstream *mpxRemote) wakeUpLoop() {
 		upstream.dLock.Lock()
 		if upstream.wClosed {
 			upstream.tasker.Stop()
+			upstream.dLock.Unlock()
 			break
 		}
 		if time.Now().Sub(upstream.lastIODone) > time.Duration(float64(UPSTREAM_KEEPALIVE)*0.8) {

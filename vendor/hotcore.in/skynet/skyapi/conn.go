@@ -9,6 +9,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"hotcore.in/skynet/skykiss"
 )
 
 var mpxLog = log.New(ioutil.Discard, "mpx ", log.LstdFlags|log.Lshortfile)
@@ -29,7 +31,8 @@ type IOLoop struct {
 }
 
 const (
-	WND_SIZE = 32 * 1024
+	WND_SIZE      = 32 * 1024
+	TCP_CLOSE_WND = 10 * time.Second
 )
 
 type ConnState uint8
@@ -64,6 +67,51 @@ const (
 	OP_JOIN_ME              = 201
 	OP_RHOST                = 202
 )
+
+func (c ConnState) String() string {
+	switch c {
+	case OP_NEW:
+		return "OP_NEW"
+	case OP_SYN:
+		return "OP_SYN"
+	case OP_ACK:
+		return "OP_ACK"
+	case OP_FIN1:
+		return "OP_FIN1"
+	case OP_FIN2:
+		return "OP_FIN2"
+	case OP_ERR:
+		return "OP_ERR"
+	case OP_SYN_ACK:
+		return "OP_SYN_ACK"
+	case OP_CLOSED:
+		return "OP_CLOSED"
+	case OP_FORCE_CLOSED:
+		return "OP_FORCE_CLOSED"
+	case OP_DATA:
+		return "OP_DATA"
+	case OP_WND_SIZE:
+		return "OP_WND_SIZE"
+	case OP_REWIND:
+		return "OP_REWIND"
+	case OP_DISCOVER:
+		return "OP_DISCOVER"
+	case OP_FORGET:
+		return "OP_FORGET"
+	case OP_SERVICE:
+		return "OP_SERVICE"
+	case OP_NO_SERVICE:
+		return "OP_NO_SERVICE"
+	case OP_NO_OP:
+		return "OP_NO_OP"
+	case OP_JOIN_ME:
+		return "OP_JOIN_ME"
+	case OP_RHOST:
+		return "OP_RHOST"
+	default:
+		return "OP_UNKNOWN"
+	}
+}
 
 type Stream struct {
 	network string
@@ -150,10 +198,11 @@ func (self *Stream) data(op Op) {
 
 	case OP_FIN2:
 		go func() {
+			var forceCloseDeadline = time.Now().Add(TCP_CLOSE_WND)
 			self.sLock.Lock()
 			for {
-				if len(self.rBuf) > 0 {
-					self.state.Wait()
+				if len(self.rBuf) > 0 && time.Now().Before(forceCloseDeadline) {
+					skykiss.WaitTimeout(&self.state, TCP_CLOSE_WND)
 					continue
 				}
 				self.status = self.status | OP_FIN2

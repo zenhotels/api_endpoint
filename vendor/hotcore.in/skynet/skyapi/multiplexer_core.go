@@ -48,6 +48,19 @@ func (op Op) Encode() BytesPackage {
 	return buf
 }
 
+func (op *Op) Decode(buf []byte) {
+	var bEnc = binary.BigEndian
+
+	op.Cmd = ConnState(buf[0])
+	op.Local = bEnc.Uint64(buf[1:9])
+	op.Remote = bEnc.Uint64(buf[9:17])
+	op.LPort = bEnc.Uint32(buf[17:21])
+	op.RPort = bEnc.Uint32(buf[21:25])
+
+	var bLen = int(bEnc.Uint32(buf[25:29]))
+	op.Data.Bytes = buf[29 : 29+bLen]
+}
+
 const (
 	ACCEPT_CONN_ESTABLISH_TIMEOUT = time.Second * 10
 )
@@ -59,8 +72,9 @@ func (op *Op) Swap() {
 
 func (op Op) String() string {
 	return fmt.Sprintf(
-		"OP{%d} {%s:%d<-%s:%d} (%d) bytes",
+		"OP{%d %s} {%s:%d<-%s:%d} (%d) bytes",
 		op.Cmd,
+		op.Cmd.String(),
 		Uint2Host(op.Local), op.LPort,
 		Uint2Host(op.Remote), op.RPort,
 		len(op.Data.Bytes),
@@ -592,6 +606,7 @@ func (mpx *multiplexer) attachDistance(conn io.ReadWriter, distance int) {
 	mpx.init()
 	var reader = bufio.NewReaderSize(conn, 64*1024)
 	var writer = bufio.NewWriterSize(conn, 64*1024)
+	// var writer = bufio.NewWriterSize(printWrites(conn, 64*1024, false), 64*1024)
 	var remote = (&mpxRemote{reader: reader, writer: writer}).init()
 
 	if c, ok := conn.(net.Conn); ok {

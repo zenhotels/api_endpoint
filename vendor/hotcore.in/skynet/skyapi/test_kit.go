@@ -5,6 +5,7 @@ import (
 	"hash"
 	"hash/adler32"
 	"io"
+	"log"
 	"math/rand"
 	"sync"
 
@@ -105,4 +106,41 @@ func (self *RndReader) RChecksum() uint32 {
 func (self *RndReader) WChecksum() uint32 {
 	self.Close()
 	return self.wchkSum.Sum32()
+}
+
+func printWrites(w io.Writer, chunkSize int, onlyOp bool) io.Writer {
+	pipeOut, pipeIn := io.Pipe()
+	wr := io.MultiWriter(w, pipeIn)
+	go func() {
+		buf := make([]byte, chunkSize)
+		var err error
+		var n int
+		var dataWritten int
+		for err != io.EOF {
+			for i := range buf {
+				buf[i] = 0
+			}
+			n, err = pipeOut.Read(buf)
+
+			var op Op
+			op.Decode(buf[:n])
+			if op.Cmd == OP_DATA {
+				dataWritten += len(op.Data.Bytes)
+				continue
+			} else if dataWritten > 0 {
+				if !onlyOp {
+					log.Printf("[WRITE DATA] %d bytes\n", dataWritten)
+				}
+				dataWritten = 0
+			}
+
+			if op.Cmd == OP_REWIND {
+				dLen := binary.BigEndian.Uint32(op.Data.Bytes)
+				log.Printf("[WRITE OP] %s [%d]", op.String(), dLen)
+			} else {
+				log.Printf("[WRITE OP] %s [%s]", op.String(), string(op.Data.Bytes))
+			}
+		}
+	}()
+	return wr
 }
