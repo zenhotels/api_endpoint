@@ -9,6 +9,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"hotcore.in/skynet/skykiss"
 )
 
 var mpxLog = log.New(ioutil.Discard, "mpx ", log.LstdFlags|log.Lshortfile)
@@ -29,7 +31,8 @@ type IOLoop struct {
 }
 
 const (
-	WND_SIZE = 32 * 1024
+	WND_SIZE      = 32 * 1024
+	TCP_CLOSE_WND = 10 * time.Second
 )
 
 type ConnState uint8
@@ -150,10 +153,11 @@ func (self *Stream) data(op Op) {
 
 	case OP_FIN2:
 		go func() {
+			var forceCloseDeadline = time.Now().Add(TCP_CLOSE_WND)
 			self.sLock.Lock()
 			for {
-				if len(self.rBuf) > 0 {
-					self.state.Wait()
+				if len(self.rBuf) > 0 && time.Now().Before(forceCloseDeadline) {
+					skykiss.WaitTimeout(&self.state, TCP_CLOSE_WND)
 					continue
 				}
 				self.status = self.status | OP_FIN2
