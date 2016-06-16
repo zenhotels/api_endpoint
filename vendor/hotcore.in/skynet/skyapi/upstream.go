@@ -13,11 +13,8 @@ import (
 var ErrTimeout = errors.New("i/o timeout")
 var Dailimeout = errors.New("dial timeout")
 
-const (
-	UPSTREAM_KEEPALIVE = time.Second * 10
-)
-
 type mpxRemote struct {
+	keepalive   time.Duration
 	reader      *bufio.Reader
 	writer      *bufio.Writer
 	wdeadline   time.Time
@@ -37,7 +34,8 @@ type mpxRemote struct {
 	wNew      sync.Cond
 	wLock     sync.Mutex
 
-	wClosed bool
+	wClosed      bool
+	wCloseIfIdle bool
 }
 
 func (upstream *mpxRemote) init() *mpxRemote {
@@ -49,6 +47,10 @@ func (upstream *mpxRemote) init() *mpxRemote {
 	upstream.lastIOReq = time.Now()
 	upstream.lastIODone = time.Now()
 	upstream.lastOP = time.Now()
+
+	if upstream.keepalive == 0 {
+		upstream.keepalive = time.Second * 10
+	}
 	upstream.dLock.Unlock()
 	go upstream.wakeUpLoop()
 	return upstream
@@ -81,17 +83,23 @@ func (upstream *mpxRemote) wakeUpLoop() {
 			upstream.dLock.Unlock()
 			break
 		}
-		if time.Now().Sub(upstream.lastIODone) > time.Duration(float64(UPSTREAM_KEEPALIVE)*0.8) {
-			go upstream.Send(Op{Cmd: OP_NO_OP})
+		if time.Now().Sub(upstream.lastIODone) > time.Duration(float64(upstream.keepalive)*0.8) {
+			if !upstream.wCloseIfIdle {
+				go upstream.Send(Op{Cmd: OP_NO_OP})
+			}
 		}
 
-		if upstream.lastIOReq.Sub(upstream.lastIODone) > UPSTREAM_KEEPALIVE {
+		if upstream.lastIOReq.Sub(upstream.lastIODone) > upstream.keepalive {
 			mpxStatLog.Println("lastIO Inactivity")
 			upstream.closeForced()
 		}
 
-		if time.Now().Sub(upstream.lastOP) > UPSTREAM_KEEPALIVE*10 {
-			mpxStatLog.Println("NOOP Inactivity", upstream)
+		if time.Now().Sub(upstream.lastOP) > upstream.keepalive*10 {
+			if upstream.wCloseIfIdle {
+				mpxStatLog.Println("NOOP Inactivity [CLOSE_IF_IDLE_OPT]", upstream)
+			} else {
+				mpxStatLog.Println("NOOP Inactivity", upstream)
+			}
 			upstream.closeForced()
 		}
 
@@ -202,6 +210,12 @@ func (upstream *mpxRemote) Close() {
 	upstream.wdeadline = time.Now().Add(time.Second)
 	upstream.wNew.Broadcast()
 	upstream.wLock.Unlock()
+}
+
+func (upstream *mpxRemote) CloseIfIdle() {
+	upstream.dLock.Lock()
+	upstream.wCloseIfIdle = true
+	upstream.dLock.Unlock()
 }
 
 func (upstream *mpxRemote) closeForced() {

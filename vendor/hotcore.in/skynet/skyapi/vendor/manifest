@@ -1,0 +1,11 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/cenk/backoff",
+			"repository": "https://github.com/cenk/backoff",
+			"revision": "c29158af31815ccc31ca29c86c121bc39e00d3d8",
+			"branch": "master"
+		}
+	]
+}

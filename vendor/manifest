@@ -16,14 +16,14 @@
 		{
 			"importpath": "hotcore.in/skynet/skyapi",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"revision": "c848758e2269c72022e0b64c2bd4bfb2030a546c",
+			"revision": "aad7c55a550a89ddc6d7d36a6fb3843ed86ae422",
 			"branch": "master",
 			"path": "/skyapi"
 		},
 		{
 			"importpath": "hotcore.in/skynet/skykiss",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"revision": "a3208ac06c0e2ba13c7c1b163dcf206ddde56271",
+			"revision": "aad7c55a550a89ddc6d7d36a6fb3843ed86ae422",
 			"branch": "master",
 			"path": "/skykiss"
 		}

@@ -15,6 +15,8 @@ type Multiplexer interface {
 	Join(network, address string) error
 	Services() []ServiceId
 	Routes() []ServiceId
+	ServiceMap() *RegistryStorage
+	RoutesMap() *RegistryStorage
 
 	WithEnv(env ...string) Multiplexer
 	WithLoopBack() Multiplexer

@@ -170,6 +170,13 @@ func (mpx *multiplexer) init() {
 		if os.Getenv("MPXROUTER") != "" {
 			go mpx.Join("tcp4", os.Getenv("MPXROUTER"))
 		}
+
+		if !mpx.cfg.NoServer {
+			var skyBind = os.Getenv("SKYNET_BIND")
+			if skyBind != "" {
+				go mpx.ListenAndServe("tcp4", skyBind)
+			}
+		}
 	})
 }
 
@@ -557,6 +564,11 @@ func (mpx *multiplexer) Services() (services []ServiceId) {
 	return
 }
 
+func (mpx *multiplexer) ServiceMap() *RegistryStorage {
+	mpx.init()
+	return &mpx.services
+}
+
 func (mpx *multiplexer) Routes() (services []ServiceId) {
 	mpx.init()
 	var forEach RegistryStorage
@@ -564,6 +576,11 @@ func (mpx *multiplexer) Routes() (services []ServiceId) {
 		services = append(services, s)
 	}, nil)
 	return
+}
+
+func (mpx *multiplexer) RoutesMap() *RegistryStorage {
+	mpx.init()
+	return &mpx.routes
 }
 
 func (mpx *multiplexer) cleanupLoop() {
@@ -603,11 +620,20 @@ func (mpx *multiplexer) cleanupLoop() {
 }
 
 func (mpx *multiplexer) attachDistance(conn io.ReadWriter, distance int) {
+	var _, wg = mpx.attachDistanceNonBlock(conn, distance)
+	wg.Wait()
+}
+
+func (mpx *multiplexer) attachDistanceNonBlock(conn io.ReadWriter, distance int) (*mpxRemote, *sync.WaitGroup) {
 	mpx.init()
 	var reader = bufio.NewReaderSize(conn, 64*1024)
 	var writer = bufio.NewWriterSize(conn, 64*1024)
+	var remote = &mpxRemote{reader: reader, writer: writer}
+	if distance == 1 {
+		remote.keepalive = time.Second * 10
+	}
+	remote.init()
 	// var writer = bufio.NewWriterSize(printWrites(conn, 64*1024, false), 64*1024)
-	var remote = (&mpxRemote{reader: reader, writer: writer}).init()
 
 	if c, ok := conn.(net.Conn); ok {
 		mpxLog.Println("Join", c.RemoteAddr().String())
@@ -639,7 +665,7 @@ func (mpx *multiplexer) attachDistance(conn io.ReadWriter, distance int) {
 		}
 		remote.Close()
 	}()
-	wg.Wait()
+	return remote, &wg
 }
 
 func (mpx *multiplexer) Attach(conn io.ReadWriter) {
@@ -811,12 +837,34 @@ func (mpx *multiplexer) farAwayLoop() {
 				select {
 				case vHostDial[vHost] <- true:
 					go func(vHost uint64, upstream *mpxRemote) {
+						var route = mpx.findRouteTimeout(vHost, 1, time.Second)
+						if route != nil {
+							mpxStatLog.Println(
+								"No more faraway connections allowed for",
+								Uint2Host(vHost),
+							)
+							return
+						}
 						var remoteConn, remoteConnErr = mpx.dialTimeout("", Uint2Host(vHost)+":0", upstream, time.Second*10)
 						upstream.SendTimeout(remoteConn.Op(OP_NEW, nil), 0)
 						if remoteConnErr != nil {
 							mpxStatLog.Println("Error while discovering", Uint2Host(vHost))
 						} else {
-							mpx.attachDistance(remoteConn, 3)
+							var remote, wg = mpx.attachDistanceNonBlock(remoteConn, 3)
+							var ticker = time.NewTicker(time.Minute)
+							go func() {
+								// Close if direct found loop
+								for range ticker.C {
+									var route = mpx.findRouteTimeout(
+										vHost, 1, time.Second,
+									)
+									if route != nil {
+										remote.CloseIfIdle()
+									}
+								}
+							}()
+							wg.Wait()
+							ticker.Stop()
 						}
 						mpx.dNew.Broadcast()
 						vHostDialLock.Lock()
@@ -964,6 +1012,7 @@ func (mpx *multiplexer) IOLoopReader(upstream *mpxRemote) error {
 			continue
 		case OP_JOIN_ME:
 			if !mpx.cfg.NoClient {
+				mpxStatLog.Println("OP_JOINME", "tcp4", string(job.Data.Bytes))
 				go mpx.Join("tcp4", string(job.Data.Bytes))
 			}
 			continue
