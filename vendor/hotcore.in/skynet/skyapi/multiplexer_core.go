@@ -851,20 +851,19 @@ func (mpx *multiplexer) farAwayLoop() {
 							mpxStatLog.Println("Error while discovering", Uint2Host(vHost))
 						} else {
 							var remote, wg = mpx.attachDistanceNonBlock(remoteConn, 3)
-							var ticker = time.NewTicker(time.Minute)
 							go func() {
-								// Close if direct found loop
-								for range ticker.C {
+								for !remote.IsClosed() {
 									var route = mpx.findRouteTimeout(
 										vHost, 1, time.Second,
 									)
 									if route != nil {
 										remote.CloseIfIdle()
 									}
+									time.Sleep(time.Minute)
 								}
 							}()
 							wg.Wait()
-							ticker.Stop()
+							remote.Close()
 						}
 						mpx.dNew.Broadcast()
 						vHostDialLock.Lock()
