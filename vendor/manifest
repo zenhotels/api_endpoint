@@ -23,7 +23,7 @@
 		{
 			"importpath": "hotcore.in/skynet/skykiss",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"revision": "aad7c55a550a89ddc6d7d36a6fb3843ed86ae422",
+			"revision": "a3208ac06c0e2ba13c7c1b163dcf206ddde56271",
 			"branch": "master",
 			"path": "/skykiss"
 		}

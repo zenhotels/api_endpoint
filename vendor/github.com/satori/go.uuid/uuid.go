@@ -258,12 +258,12 @@ func (u *UUID) UnmarshalText(text []byte) (err error) {
 			return
 		}
 
-		if i == 2 {
-			if !bytes.Contains([]byte("012345"), []byte{t[0]}) {
-				err = fmt.Errorf("uuid: invalid version number: %s", t[0])
-				return
-			}
-		}
+		//if i == 2 {
+		//	if !bytes.Contains([]byte("012345"), []byte{t[0]}) {
+		//		err = fmt.Errorf("uuid: invalid version number: %s", t[0])
+		//		return
+		//	}
+		//}
 
 		if len(t) < byteGroup {
 			err = fmt.Errorf("uuid: UUID string too short: %s", text)

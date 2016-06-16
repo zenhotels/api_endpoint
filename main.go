@@ -16,7 +16,8 @@ import (
 	"encoding/binary"
 )
 
-var skynet = skyapi.SkyNet.New()
+var skynet = skyapi.SkyNet.Client().New()
+var skyserv = skyapi.SkyNet.Server().New()
 var reverse = &httputil.ReverseProxy{
 	Transport: &http.Transport{
 		Dial: func(lnet, laddr string) (net.Conn, error) {
@@ -49,10 +50,10 @@ var reverse = &httputil.ReverseProxy{
 		var session = req.URL.Query().Get("session")
 		if session != "" {
 			var sessuid, decErr = uuid.FromString(session)
-			if decErr != nil {
+			if decErr == nil {
 				req.Host = fmt.Sprintf(
 					"%s:%d",
-					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes())),
+					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
 					13337,
 				)
 			}
@@ -77,14 +78,14 @@ func main() {
 	}
 	skynet.Services()
 
-	var skyL, skyLErr = skynet.Bind("", srvId)
+	var skyL, skyLErr = skyserv.Bind("", srvId)
 	if skyLErr != nil {
 		log.Panicln(skyLErr)
 	}
 
 	go http.Serve(skyL, reverse)
 	go func() {
-		if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
+		if srvErr := skyserv.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
 			log.Panicln(srvErr)
 		}
 	}()
