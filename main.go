@@ -70,7 +70,7 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 		},
 	}
 	switch c.Upstream.Scheme {
-	case "shttp":
+	case "http":
 		var dialer = &net.Dialer{
 			Timeout:   c.DialTimeout,
 			DualStack: false,
@@ -79,7 +79,7 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 			Dial:              dialer.Dial,
 			DisableKeepAlives: true,
 		}
-	case "http":
+	case "shttp":
 		reverse.Transport = &http.Transport{
 			Dial: func(lnet, laddr string) (net.Conn, error) {
 				var host, port, hpErr = net.SplitHostPort(laddr)
@@ -114,6 +114,7 @@ func main() {
 		httpPort = "8080"
 	}
 	skynet.Services()
+	var httpBind = "0.0.0.0:"+httpPort
 
 	for _, envQ := range os.Environ() {
 		var envParsed = srvRe.FindStringSubmatch(envQ)
@@ -180,7 +181,7 @@ func main() {
 				log.Panicln("Multiple usage of HOST", vHost)
 			}
 			hs[vHost] = r
-			log.Println("Serving HTTP for", vHost)
+			log.Println("Serving HTTP for", vHost, "on", httpBind)
 		}
 		for _, vHost := range srvConf.VHost {
 			for _, vSysHost := range sysHost {
@@ -199,7 +200,7 @@ func main() {
 		log.Panicln(srvErr)
 	}
 
-	if httpServeErr := http.ListenAndServe("0.0.0.0:"+httpPort, hs); httpServeErr != nil {
+	if httpServeErr := http.ListenAndServe(httpBind, hs); httpServeErr != nil {
 		log.Panic(httpServeErr)
 	}
 }
