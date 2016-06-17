@@ -1,25 +1,20 @@
 package main
 
 import (
+	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	_ "net/http/pprof"
+	"net/url"
+	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/satori/go.uuid"
-
-	"os"
-
-	"net/url"
-
-	"encoding/binary"
-	"fmt"
-
-	"regexp"
-
-	"strings"
 
 	"hotcore.in/skynet/skyapi"
 )
@@ -48,12 +43,27 @@ func SessionLocatorQuery(pName string) func(*http.Request) string {
 	}
 }
 
+func JoinSkipEmpty(sep string, s ...string) string {
+	var sL = make([]string, 0, len(s))
+	for _, si := range s {
+		if si == "" {
+			continue
+		}
+		sL = append(sL, si)
+	}
+	return strings.Join(sL, sep)
+}
+
 type reverseConf struct {
 	Upstream    *url.URL
 	Director    func(*http.Request)
 	DialTimeout time.Duration
 	VHost       []string
 	Listen      string
+}
+
+type keyConf struct {
+	ID string
 }
 
 func mkReverse(c reverseConf) *httputil.ReverseProxy {
@@ -104,7 +114,10 @@ var skyPort = os.Getenv("SKYNET_PORT")
 var sysHost = strings.Split(os.Getenv("SYSHOST"), ",")
 
 var services = map[string]reverseConf{}
+var apiKeys = map[string]keyConf{}
+
 var srvRe = regexp.MustCompilePOSIX("SRV_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
+var keyRe = regexp.MustCompilePOSIX("KEY_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
 
 func main() {
 	if skyPort == "" {
@@ -114,86 +127,105 @@ func main() {
 		httpPort = "8080"
 	}
 	skynet.Services()
-	var httpBind = "0.0.0.0:"+httpPort
+	var httpBind = "0.0.0.0:" + httpPort
+
+	apiKeys["common"] = keyConf{}
 
 	for _, envQ := range os.Environ() {
 		var envParsed = srvRe.FindStringSubmatch(envQ)
-		if len(envParsed) == 0 {
-			log.Println("Skipping environment variable", envQ)
+		var apiKeyParsed = keyRe.FindStringSubmatch(envQ)
+		if len(envParsed) > 0 {
+			var service, param, value = envParsed[1], envParsed[2], envParsed[3]
+			var srv = services[service]
+			switch param {
+			case "UPSTREAM":
+				var upstream, upErr = url.Parse(value)
+				if upErr != nil {
+					log.Panicln("Error while UPSTREAM parsing in", envQ, upErr)
+				}
+				srv.Upstream = upstream
+			case "SESSION":
+				var sessParams, sessErr = url.ParseQuery(value)
+				if sessErr != nil {
+					log.Panicln("Error while SESSION parsing in", envQ, sessErr)
+				}
+				srv.Director = SessionBasedDirector(
+					SessionLocatorQuery(sessParams.Get("key")),
+					sessParams.Get("vport"),
+				)
+			case "TIMEOUT":
+				var duration, dParseErr = time.ParseDuration(value)
+				if dParseErr != nil {
+					log.Panicln("Error while TIMEOUT parsing in", envQ, dParseErr)
+				}
+				srv.DialTimeout = duration
+			case "HOST":
+				srv.VHost = strings.Split(value, ",")
+			default:
+				log.Panicln("Error while parsing in unknown param in", envQ, param)
+			}
+			services[service] = srv
 			continue
 		}
-		var service, param, value = envParsed[1], envParsed[2], envParsed[3]
-		var srv = services[service]
-		switch param {
-		case "UPSTREAM":
-			var upstream, upErr = url.Parse(value)
-			if upErr != nil {
-				log.Panicln("Error while UPSTREAM parsing in", envQ, upErr)
+		if len(apiKeyParsed) > 0 {
+			var keyName, param, value = apiKeyParsed[1], apiKeyParsed[2], apiKeyParsed[3]
+			var key = apiKeys[keyName]
+			switch param {
+			case "ID":
+				key.ID = value
+			default:
+				log.Panicln("Error while parsing in unknown param in", envQ, param)
 			}
-			srv.Upstream = upstream
-		case "SESSION":
-			var sessParams, sessErr = url.ParseQuery(value)
-			if sessErr != nil {
-				log.Panicln("Error while SESSION parsing in", envQ, sessErr)
-			}
-			srv.Director = SessionBasedDirector(
-				SessionLocatorQuery(sessParams.Get("key")),
-				sessParams.Get("vport"),
-			)
-		case "TIMEOUT":
-			var duration, dParseErr = time.ParseDuration(value)
-			if dParseErr != nil {
-				log.Panicln("Error while TIMEOUT parsing in", envQ, dParseErr)
-			}
-			srv.DialTimeout = duration
-		case "HOST":
-			srv.VHost = strings.Split(value, ",")
-		default:
-			log.Panicln("Error while parsing in unknown param in", envQ, param)
+			apiKeys[keyName] = key
+			continue
 		}
-		services[service] = srv
+		log.Println("Skipping environment variable", envQ)
 	}
 
 	var hs = make(HostSwitch)
-	for srvName, srvConf := range services {
-		if srvConf.Upstream.Scheme == "" {
-			srvConf.Upstream.Scheme = "shttp"
-		}
-		if srvConf.Upstream == nil {
-			log.Panicln("UPSTREAM not configured for", srvName)
-		}
-		if srvConf.DialTimeout == 0 {
-			srvConf.DialTimeout = time.Second * 10
-		}
-		if len(srvConf.VHost) == 0 {
-			log.Panicln("HOST not configured for", srvName)
-		}
-		services[srvName] = srvConf
-		var vHosts = srvConf.VHost
-		for _, vHost := range srvConf.VHost {
-			for _, vSysHost := range sysHost {
-				vHosts = append(vHosts, vHost+"."+vSysHost)
+
+	for _, apiKey := range apiKeys {
+		for srvName, srvConf := range services {
+			if srvConf.Upstream.Scheme == "" {
+				srvConf.Upstream.Scheme = "shttp"
 			}
-		}
-		var r = mkReverse(srvConf)
-		for _, vHost := range vHosts {
-			if hs[vHost] != nil {
-				log.Panicln("Multiple usage of HOST", vHost)
+			if srvConf.Upstream == nil {
+				log.Panicln("UPSTREAM not configured for", srvName)
 			}
-			hs[vHost] = r
-			log.Println("Serving HTTP for", vHost, "on", httpBind)
-		}
-		for _, vHost := range srvConf.VHost {
-			for _, vSysHost := range sysHost {
-				var srv = vHost + "." + vSysHost
-				var skyL, skyLErr = skynet.Bind("", srv)
-				if skyLErr != nil {
-					log.Panicln("Error while binding skynet service", srv)
+			if srvConf.DialTimeout == 0 {
+				srvConf.DialTimeout = time.Second * 10
+			}
+			if len(srvConf.VHost) == 0 {
+				log.Panicln("HOST not configured for", srvName)
+			}
+			services[srvName] = srvConf
+			var vHosts = []string{}
+			for _, vHost := range srvConf.VHost {
+				for _, vSysHost := range sysHost {
+					vHosts = append(vHosts, JoinSkipEmpty(".", vHost, apiKey.ID, vSysHost))
 				}
-				log.Println("Serving SHTTP for", srv)
-				go http.Serve(skyL, r)
+			}
+			var r = mkReverse(srvConf)
+			for _, vHost := range vHosts {
+				if hs[vHost] != nil {
+					log.Panicln("Multiple usage of HOST", vHost)
+				}
+				hs[vHost] = r
+				log.Println("Serving HTTP for", vHost, "on", httpBind)
+			}
+			for _, vHost := range srvConf.VHost {
+				for _, vSysHost := range sysHost {
+					var srv = JoinSkipEmpty(".", vHost, apiKey.ID, vSysHost)
+					var skyL, skyLErr = skynet.Bind("", srv)
+					if skyLErr != nil {
+						log.Panicln("Error while binding skynet service", srv)
+					}
+					log.Println("Serving SHTTP for", srv)
+					go http.Serve(skyL, r)
+				}
 			}
 		}
+
 	}
 
 	if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
