@@ -19,6 +19,8 @@ import (
 
 	"regexp"
 
+	"strings"
+
 	"hotcore.in/skynet/skyapi"
 )
 
@@ -47,26 +49,27 @@ func SessionLocatorQuery(pName string) func(*http.Request) string {
 }
 
 type reverseConf struct {
-	Protocol    string
 	Upstream    *url.URL
 	Director    func(*http.Request)
 	DialTimeout time.Duration
-	VHost       string
+	VHost       []string
+	Listen      string
 }
 
 func mkReverse(c reverseConf) *httputil.ReverseProxy {
 	var reverse = &httputil.ReverseProxy{
 		FlushInterval: time.Millisecond * 10,
 		Director: func(req *http.Request) {
-			req.URL.Scheme = c.Upstream.Scheme
+			req.URL.Scheme = "http"
 			req.URL.Host = c.Upstream.Host
+			req.Host = c.Upstream.Host
 
 			if c.Director != nil {
-				c.Director(&req)
+				c.Director(req)
 			}
 		},
 	}
-	switch c.Protocol {
+	switch c.Upstream.Scheme {
 	case "shttp":
 		var dialer = &net.Dialer{
 			Timeout:   c.DialTimeout,
@@ -91,12 +94,14 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 			DisableKeepAlives: true,
 		}
 	default:
-		log.Panicln("Unsupported scheme", c.Protocol)
+		log.Panicln("Unsupported scheme", c.Upstream.Scheme)
 	}
+	return reverse
 }
 
 var httpPort = os.Getenv("HTTP_PORT")
 var skyPort = os.Getenv("SKYNET_PORT")
+var sysHost = strings.Split(os.Getenv("SYSHOST"), ",")
 
 var services = map[string]reverseConf{}
 var srvRe = regexp.MustCompilePOSIX("SRV_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
@@ -114,12 +119,11 @@ func main() {
 		var envParsed = srvRe.FindStringSubmatch(envQ)
 		if len(envParsed) == 0 {
 			log.Println("Skipping environment variable", envQ)
+			continue
 		}
 		var service, param, value = envParsed[1], envParsed[2], envParsed[3]
 		var srv = services[service]
 		switch param {
-		case "PROTOCOL":
-			srv.Protocol = value
 		case "UPSTREAM":
 			var upstream, upErr = url.Parse(value)
 			if upErr != nil {
@@ -142,39 +146,60 @@ func main() {
 			}
 			srv.DialTimeout = duration
 		case "HOST":
-			srv.VHost = value
+			srv.VHost = strings.Split(value, ",")
 		default:
 			log.Panicln("Error while parsing in unknown param in", envQ, param)
 		}
 		services[service] = srv
 	}
 
+	var hs = make(HostSwitch)
 	for srvName, srvConf := range services {
-		if srvConf.Protocol == "" {
-			srvConf.Protocol = "shttp"
+		if srvConf.Upstream.Scheme == "" {
+			srvConf.Upstream.Scheme = "shttp"
 		}
 		if srvConf.Upstream == nil {
-			log.Panicln("UPSTREAM not configured in", srvName)
+			log.Panicln("UPSTREAM not configured for", srvName)
 		}
 		if srvConf.DialTimeout == 0 {
 			srvConf.DialTimeout = time.Second * 10
 		}
-		services[srvName] = srvConf
-	}
-
-	go http.Serve(skyL, reverse)
-	go func() {
-		if srvErr := skyserv.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
-			log.Panicln(srvErr)
+		if len(srvConf.VHost) == 0 {
+			log.Panicln("HOST not configured for", srvName)
 		}
-	}()
-
-	var skyL, skyLErr = skyserv.Bind("", srvId)
-	if skyLErr != nil {
-		log.Panicln(skyLErr)
+		services[srvName] = srvConf
+		var vHosts = srvConf.VHost
+		for _, vHost := range srvConf.VHost {
+			for _, vSysHost := range sysHost {
+				vHosts = append(vHosts, vHost+"."+vSysHost)
+			}
+		}
+		var r = mkReverse(srvConf)
+		for _, vHost := range vHosts {
+			if hs[vHost] != nil {
+				log.Panicln("Multiple usage of HOST", vHost)
+			}
+			hs[vHost] = r
+			log.Println("Serving HTTP for", vHost)
+		}
+		for _, vHost := range srvConf.VHost {
+			for _, vSysHost := range sysHost {
+				var srv = vHost + "." + vSysHost
+				var skyL, skyLErr = skynet.Bind("", srv)
+				if skyLErr != nil {
+					log.Panicln("Error while binding skynet service", srv)
+				}
+				log.Println("Serving SHTTP for", srv)
+				go http.Serve(skyL, r)
+			}
+		}
 	}
 
-	if httpServeErr := http.ListenAndServe("0.0.0.0:"+httpPort, reverse); httpServeErr != nil {
+	if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
+		log.Panicln(srvErr)
+	}
+
+	if httpServeErr := http.ListenAndServe("0.0.0.0:"+httpPort, hs); httpServeErr != nil {
 		log.Panic(httpServeErr)
 	}
 }
