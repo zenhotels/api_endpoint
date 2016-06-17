@@ -63,7 +63,8 @@ type reverseConf struct {
 }
 
 type keyConf struct {
-	ID string
+	ID       string
+	VSrvMap  map[string]string
 }
 
 func mkReverse(c reverseConf) *httputil.ReverseProxy {
@@ -118,6 +119,7 @@ var apiKeys = map[string]keyConf{}
 
 var srvRe = regexp.MustCompilePOSIX("SRV_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
 var keyRe = regexp.MustCompilePOSIX("KEY_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
+var stageRe = regexp.MustCompilePOSIX("STAGE_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
 
 func main() {
 	if skyPort == "" {
@@ -134,6 +136,7 @@ func main() {
 	for _, envQ := range os.Environ() {
 		var envParsed = srvRe.FindStringSubmatch(envQ)
 		var apiKeyParsed = keyRe.FindStringSubmatch(envQ)
+		var stageKeyParsed = stageRe.FindStringSubmatch(envQ)
 		if len(envParsed) > 0 {
 			var service, param, value = envParsed[1], envParsed[2], envParsed[3]
 			var srv = services[service]
@@ -179,53 +182,66 @@ func main() {
 			apiKeys[keyName] = key
 			continue
 		}
+		if len(stageKeyParsed) > 0 {
+			var keyName, param, value = stageKeyParsed[1], stageKeyParsed[2], stageKeyParsed[3]
+			var key = apiKeys[keyName]
+			if key.VSrvMap == nil {
+				key.VSrvMap = make(map[string]string)
+			}
+			key.VSrvMap[param] = value
+			apiKeys[keyName] = key
+		}
 		log.Println("Skipping environment variable", envQ)
+	}
+
+	var hMap = map[string]http.Handler{}
+
+	for srvName, srvConf := range services {
+		if srvConf.Upstream.Scheme == "" {
+			srvConf.Upstream.Scheme = "shttp"
+		}
+		if srvConf.Upstream == nil {
+			log.Panicln("UPSTREAM not configured for", srvName)
+		}
+		if srvConf.DialTimeout == 0 {
+			srvConf.DialTimeout = time.Second * 10
+		}
+		if len(srvConf.VHost) == 0 {
+			log.Panicln("HOST not configured for", srvName)
+		}
+		services[srvName] = srvConf
+		hMap[srvName] = mkReverse(srvConf)
 	}
 
 	var hs = make(HostSwitch)
 
-	for _, apiKey := range apiKeys {
+	for apiId, apiKey := range apiKeys {
 		for srvName, srvConf := range services {
-			if srvConf.Upstream.Scheme == "" {
-				srvConf.Upstream.Scheme = "shttp"
+			var r = hMap[srvName]
+			if override, found := apiKey.VSrvMap[srvName]; found {
+				r = hMap[override]
 			}
-			if srvConf.Upstream == nil {
-				log.Panicln("UPSTREAM not configured for", srvName)
-			}
-			if srvConf.DialTimeout == 0 {
-				srvConf.DialTimeout = time.Second * 10
-			}
-			if len(srvConf.VHost) == 0 {
-				log.Panicln("HOST not configured for", srvName)
-			}
-			services[srvName] = srvConf
-			var vHosts = []string{}
-			for _, vHost := range srvConf.VHost {
-				for _, vSysHost := range sysHost {
-					vHosts = append(vHosts, JoinSkipEmpty(".", vHost, apiKey.ID, vSysHost))
-				}
-			}
-			var r = mkReverse(srvConf)
-			for _, vHost := range vHosts {
-				if hs[vHost] != nil {
-					log.Panicln("Multiple usage of HOST", vHost)
-				}
-				hs[vHost] = r
-				log.Println("Serving HTTP for", vHost, "on", httpBind)
+			if r == nil {
+				log.Panicln("No handler for", apiId, srvName)
 			}
 			for _, vHost := range srvConf.VHost {
 				for _, vSysHost := range sysHost {
-					var srv = JoinSkipEmpty(".", vHost, apiKey.ID, vSysHost)
-					var skyL, skyLErr = skynet.Bind("", srv)
-					if skyLErr != nil {
-						log.Panicln("Error while binding skynet service", srv)
+					var vHost = JoinSkipEmpty(".", vHost, apiKey.ID, vSysHost)
+					if hs[vHost] != nil {
+						log.Panicln("Multiple usage of HOST", vHost)
 					}
-					log.Println("Serving SHTTP for", srv)
+					hs[vHost] = r
+					log.Println("Serving HTTP for", vHost, "on", httpBind)
+
+					var skyL, skyLErr = skynet.Bind("", vHost)
+					if skyLErr != nil {
+						log.Panicln("Failed while binding skynet to", vHost)
+					}
 					go http.Serve(skyL, r)
+					log.Println("Serving SHTTP for", vHost)
 				}
 			}
 		}
-
 	}
 
 	if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
