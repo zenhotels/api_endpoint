@@ -39,6 +39,7 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 
 func SessionLocatorQuery(pName string) func(*http.Request) string {
 	return func(req *http.Request) string {
+		req.ParseForm()
 		return req.URL.Query().Get(pName)
 	}
 }
