@@ -1,7 +1,7 @@
 before_script:
     - build_tag=ci-$CI_PROJECT_ID-$CI_BUILD_REF
     - project=${CI_PROJECT_DIR##*/}
-    - export REGISTRYS="docker.hotcore.in/releases"
+    - export REGISTRYS="docker-aws.ostrovok.ru/releases"
     - docker info
 
 stages:
