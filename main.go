@@ -32,6 +32,7 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
 					vport,
 				)
+				req.URL.Host = req.Host
 			}
 		}
 	}
@@ -63,8 +64,8 @@ type reverseConf struct {
 }
 
 type keyConf struct {
-	ID       string
-	VSrvMap  map[string]string
+	ID      string
+	VSrvMap map[string]string
 }
 
 func mkReverse(c reverseConf) *httputil.ReverseProxy {
