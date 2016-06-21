@@ -544,13 +544,18 @@ func (mpx *multiplexer) p2pNotifyLoop(upstream *mpxRemote, distance int) {
 	}
 
 	mpx.lAddrLock.Lock()
+	var sent = map[string]bool{}
 	for !upstream.IsClosed() {
 		for lhost := range mpx.lhosts {
 			for lport := range mpx.lports {
-				go upstream.Send(welcomeMsg(mpx.local, lhost+":"+lport))
+				var loc = lhost + lport
+				if !sent[loc] {
+					go upstream.Send(welcomeMsg(mpx.local, lhost+":"+lport))
+					sent[loc] = true
+				}
 			}
 		}
-		mpx.lNew.Wait()
+		skykiss.WaitTimeout(&mpx.lNew, time.Minute)
 	}
 	mpx.lAddrLock.Unlock()
 }

@@ -4,25 +4,29 @@
 		{
 			"importpath": "github.com/cenk/backoff",
 			"repository": "https://github.com/cenk/backoff",
+			"vcs": "",
 			"revision": "a6030178a585d5972d4d33ce61f4a1fa40eaaed0",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/satori/go.uuid",
 			"repository": "https://github.com/satori/go.uuid",
+			"vcs": "",
 			"revision": "879c5887cd475cd7864858769793b2ceb0d44feb",
 			"branch": "master"
 		},
 		{
 			"importpath": "hotcore.in/skynet/skyapi",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"revision": "2e75a0f24beb88215ae5042415fc0c5dad201754",
+			"vcs": "git",
+			"revision": "decda4acb9cc61b48d8ee3f50d8d11abeba2cb8f",
 			"branch": "master",
 			"path": "/skyapi"
 		},
 		{
 			"importpath": "hotcore.in/skynet/skykiss",
 			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
+			"vcs": "",
 			"revision": "2e75a0f24beb88215ae5042415fc0c5dad201754",
 			"branch": "master",
 			"path": "/skykiss"
