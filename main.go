@@ -132,7 +132,7 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 				}
 				return skynet.DialTimeout(lnet, host, c.DialTimeout)
 			},
-			DisableKeepAlives: false,
+			DisableKeepAlives: true,
 		}
 	case "hotcore":
 		reverse.Transport = &http.Transport{
@@ -146,7 +146,7 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 				}
 				return skynet.DialTimeout("vport2registry", host, c.DialTimeout)
 			},
-			DisableKeepAlives: false,
+			DisableKeepAlives: true,
 		}
 	default:
 		log.Panicln("Unsupported scheme", c.Upstream.Scheme)
