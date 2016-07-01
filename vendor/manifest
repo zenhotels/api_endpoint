@@ -4,32 +4,77 @@
 		{
 			"importpath": "github.com/cenk/backoff",
 			"repository": "https://github.com/cenk/backoff",
-			"vcs": "",
-			"revision": "a6030178a585d5972d4d33ce61f4a1fa40eaaed0",
-			"branch": "master"
+			"vcs": "git",
+			"revision": "cdf48bbc1eb78d1349cbda326a4a037f7ba565c6",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/julienschmidt/httprouter",
+			"repository": "https://github.com/julienschmidt/httprouter",
+			"vcs": "git",
+			"revision": "77366a47451a56bb3ba682481eed85b64fea14e8",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/rcrowley/go-metrics",
+			"repository": "https://github.com/rcrowley/go-metrics",
+			"vcs": "git",
+			"revision": "cfa5a85e9f0abbdf1701b59082c36fc7bff10759",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/satori/go.uuid",
 			"repository": "https://github.com/satori/go.uuid",
-			"vcs": "",
-			"revision": "879c5887cd475cd7864858769793b2ceb0d44feb",
-			"branch": "master"
-		},
-		{
-			"importpath": "hotcore.in/skynet/skyapi",
-			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
 			"vcs": "git",
-			"revision": "decda4acb9cc61b48d8ee3f50d8d11abeba2cb8f",
+			"revision": "879c5887cd475cd7864858769793b2ceb0d44feb",
 			"branch": "master",
-			"path": "/skyapi"
+			"notests": true
 		},
 		{
-			"importpath": "hotcore.in/skynet/skykiss",
-			"repository": "https://gitlab.ostrovok.ru/hotcore/skynet.git",
-			"vcs": "",
-			"revision": "2e75a0f24beb88215ae5042415fc0c5dad201754",
+			"importpath": "github.com/stathat/go",
+			"repository": "https://github.com/stathat/go",
+			"vcs": "git",
+			"revision": "c828dca0ee6eadc566bfcbcc00e4a992f12821a3",
 			"branch": "master",
-			"path": "/skykiss"
+			"notests": true
+		},
+		{
+			"importpath": "github.com/stretchr/testify/assert",
+			"repository": "https://github.com/stretchr/testify",
+			"vcs": "git",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"branch": "master",
+			"path": "/assert",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/stretchr/testify/vendor/github.com/davecgh/go-spew/spew",
+			"repository": "https://github.com/stretchr/testify",
+			"vcs": "git",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"branch": "master",
+			"path": "vendor/github.com/davecgh/go-spew/spew",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/stretchr/testify/vendor/github.com/pmezard/go-difflib/difflib",
+			"repository": "https://github.com/stretchr/testify",
+			"vcs": "git",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"branch": "master",
+			"path": "vendor/github.com/pmezard/go-difflib/difflib",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/zenhotels/astranet",
+			"repository": "https://github.com/zenhotels/astranet",
+			"vcs": "git",
+			"revision": "8b0616399ef9ee3ea2663ba6619f50f72da4fc03",
+			"branch": "master",
+			"notests": true
 		}
 	]
 }

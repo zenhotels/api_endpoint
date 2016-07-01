@@ -15,11 +15,10 @@ import (
 	"time"
 
 	"github.com/satori/go.uuid"
-
-	"hotcore.in/skynet/skyapi"
+	"github.com/zenhotels/astranet"
 )
 
-var skynet = skyapi.SkyNet.New()
+var skynet = astranet.New()
 
 func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) func(*http.Request) {
 	return func(req *http.Request) {
@@ -29,7 +28,7 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 			if decErr == nil {
 				req.Host = fmt.Sprintf(
 					"%s:%s",
-					skyapi.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
+					astranet.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
 					vport,
 				)
 				req.URL.Host = req.Host
@@ -39,6 +38,21 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 }
 
 func SessionLocatorQuery(pName string) func(*http.Request) string {
+	return func(req *http.Request) string {
+		return req.URL.Query().Get(pName)
+	}
+}
+
+func StickyDirector(stickyLocator func(*http.Request) string) func(*http.Request) {
+	return func(req *http.Request) {
+		var sticky = stickyLocator(req)
+		if sticky != "" {
+			req.URL.Host = fmt.Sprintf("%s:%s", req.Host, sticky)
+		}
+	}
+}
+
+func StickyLocatorQuery(pName string) func(*http.Request) string {
 	return func(req *http.Request) string {
 		return req.URL.Query().Get(pName)
 	}
@@ -57,7 +71,7 @@ func JoinSkipEmpty(sep string, s ...string) string {
 
 type reverseConf struct {
 	Upstream    *url.URL
-	Director    func(*http.Request)
+	Director    []func(*http.Request)
 	DialTimeout time.Duration
 	VHost       []string
 	Listen      string
@@ -76,8 +90,8 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 			req.URL.Host = c.Upstream.Host
 			req.Host = c.Upstream.Host
 
-			if c.Director != nil {
-				c.Director(req)
+			for _, d := range c.Director {
+				d(req)
 			}
 		},
 	}
@@ -89,7 +103,7 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 		}
 		reverse.Transport = &http.Transport{
 			Dial:              dialer.Dial,
-			DisableKeepAlives: true,
+			DisableKeepAlives: false,
 		}
 	case "shttp":
 		reverse.Transport = &http.Transport{
@@ -103,7 +117,21 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 				}
 				return skynet.DialTimeout(lnet, host, c.DialTimeout)
 			},
-			DisableKeepAlives: true,
+			DisableKeepAlives: false,
+		}
+	case "hotcore":
+		reverse.Transport = &http.Transport{
+			Dial: func(lnet, laddr string) (net.Conn, error) {
+				var host, port, hpErr = net.SplitHostPort(laddr)
+				if hpErr != nil {
+					return nil, hpErr
+				}
+				if port != "80" {
+					host += ":" + port
+				}
+				return skynet.DialTimeout("vport2registry", host, c.DialTimeout)
+			},
+			DisableKeepAlives: false,
 		}
 	default:
 		log.Panicln("Unsupported scheme", c.Upstream.Scheme)
@@ -148,15 +176,13 @@ func main() {
 					log.Panicln("Error while UPSTREAM parsing in", envQ, upErr)
 				}
 				srv.Upstream = upstream
-			case "SESSION":
-				var sessParams, sessErr = url.ParseQuery(value)
-				if sessErr != nil {
-					log.Panicln("Error while SESSION parsing in", envQ, sessErr)
+				if upstream.Scheme == "hotcore" {
+					srv.Director = append(
+						srv.Director,
+						StickyDirector(StickyLocatorQuery("client_uid")),
+						SessionBasedDirector(SessionLocatorQuery("session"), "13337"),
+					)
 				}
-				srv.Director = SessionBasedDirector(
-					SessionLocatorQuery(sessParams.Get("key")),
-					sessParams.Get("vport"),
-				)
 			case "TIMEOUT":
 				var duration, dParseErr = time.ParseDuration(value)
 				if dParseErr != nil {
@@ -244,7 +270,7 @@ func main() {
 			}
 		}
 	}
-	
+
 	if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
 		log.Panicln(srvErr)
 	}
