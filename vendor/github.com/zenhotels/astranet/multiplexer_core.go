@@ -244,7 +244,6 @@ func (mpx *multiplexer) dialTimeout(network, hp string, route *mpxRemote, t time
 	case network == "vport2registry" && portStr != "":
 		vBucket = int(crc32.ChecksumIEEE([]byte(portStr)))
 		algo = SortedChooser{}
-		fmt.Println(network, hostStr, portStr, port)
 		hp = hostStr
 		break
 	case netErr == nil && netInfo.Scheme == "registry":
