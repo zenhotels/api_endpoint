@@ -14,11 +14,22 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+	"io"
+
 	"github.com/satori/go.uuid"
 	"github.com/zenhotels/astranet"
 )
 
 var skynet = astranet.New()
+
+type Closer struct {
+	io.Reader
+}
+
+func (self Closer) Close() error {
+	return nil
+}
 
 func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) func(*http.Request) {
 	return func(req *http.Request) {
@@ -37,10 +48,19 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 	}
 }
 
-func SessionLocatorQuery(pName string) func(*http.Request) string {
+func FormQuery(pName string) func(*http.Request) string {
 	return func(req *http.Request) string {
-		req.ParseForm()
-		return req.Form.Get(pName)
+		if req.Method == "POST" {
+			var pBodyBuf = bytes.NewBuffer(nil)
+			io.Copy(pBodyBuf, req.Body)
+			req.Body.Close()
+			req.Body = Closer{pBodyBuf}
+			var rBodyBytes = pBodyBuf.Bytes()
+			req.ParseForm()
+			req.Body = Closer{bytes.NewBuffer(rBodyBytes)}
+			return req.Form.Get(pName)
+		}
+		return req.URL.Query().Get(pName)
 	}
 }
 
@@ -50,12 +70,6 @@ func StickyDirector(stickyLocator func(*http.Request) string) func(*http.Request
 		if sticky != "" {
 			req.URL.Host = fmt.Sprintf("%s:%s", req.Host, sticky)
 		}
-	}
-}
-
-func StickyLocatorQuery(pName string) func(*http.Request) string {
-	return func(req *http.Request) string {
-		return req.URL.Query().Get(pName)
 	}
 }
 
@@ -180,8 +194,8 @@ func main() {
 				if upstream.Scheme == "hotcore" {
 					srv.Director = append(
 						srv.Director,
-						StickyDirector(StickyLocatorQuery("client_uid")),
-						SessionBasedDirector(SessionLocatorQuery("session"), "13337"),
+						StickyDirector(FormQuery("client_uid")),
+						SessionBasedDirector(FormQuery("session"), "13337"),
 					)
 				}
 			case "TIMEOUT":
