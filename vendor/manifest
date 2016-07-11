@@ -72,7 +72,7 @@
 			"importpath": "github.com/zenhotels/astranet",
 			"repository": "https://github.com/zenhotels/astranet",
 			"vcs": "git",
-			"revision": "8b0616399ef9ee3ea2663ba6619f50f72da4fc03",
+			"revision": "34f84bedeb8ecdda541f18bb1413a3dca47ce2da",
 			"branch": "master",
 			"notests": true
 		}
