@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"io"
 
+	"github.com/satori/go.uuid"
 	"github.com/zenhotels/astranet"
 )
 
