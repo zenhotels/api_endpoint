@@ -19,6 +19,7 @@ import (
 
 	"github.com/satori/go.uuid"
 	"github.com/zenhotels/astranet"
+	"github.com/zenhotels/astranet/addr"
 )
 
 var skynet = astranet.New()
@@ -39,7 +40,7 @@ func SessionBasedDirector(sessLocator func(*http.Request) string, vport string) 
 			if decErr == nil {
 				req.Host = fmt.Sprintf(
 					"%s:%s",
-					astranet.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
+					addr.Uint2Host(binary.BigEndian.Uint64(sessuid.Bytes()[0:8])),
 					vport,
 				)
 				req.URL.Host = req.Host
