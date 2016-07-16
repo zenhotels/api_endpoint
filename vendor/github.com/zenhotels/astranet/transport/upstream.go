@@ -2,16 +2,17 @@ package transport
 
 import (
 	"bufio"
+	"bytes"
 	"container/list"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"runtime/pprof"
 	"sync"
 	"time"
-
-	"log"
 
 	"github.com/zenhotels/astranet/glog"
 	"github.com/zenhotels/astranet/protocol"
@@ -171,7 +172,7 @@ func (self *transport) SendTimeout(op protocol.Op, t time.Duration) (err error) 
 	case op.Cmd.Priority():
 		self.wSysBuf = append(self.wSysBuf, op.Encode())
 	default:
-	loopDone:
+		loopDone:
 		for {
 			switch {
 			case self.wClosed:
@@ -319,26 +320,42 @@ func (self *transport) IsClosed() bool {
 
 func (self *transport) IOLoopReader() error {
 	var bEnc = binary.BigEndian
-	defer func() {
-		self.Close()
-	}()
-
 	var opLock sync.RWMutex
 	var opStart time.Time
 	var opHeader protocol.Op
 	var opDone time.Time
 
+	defer func() {
+		self.Close()
+
+		opLock.Lock()
+		opDone = time.Now()
+		opLock.Unlock()
+	}()
+
 	var opLatencyCheck func()
 	opLatencyCheck = func() {
 		opLock.RLock()
 		if opDone.Before(opStart) && time.Now().Sub(opStart) > 10*time.Second {
-			self.Log.Panic(
-				"FREEZE while reading from UPSTREAM", opHeader, self.id, time.Now().Sub(opStart),
-			)
+			var goroutines = pprof.Lookup("goroutine")
+			var buf = bytes.NewBuffer(nil)
+			goroutines.WriteTo(buf, 1)
+			self.Log.VLog(0,
+				func(l *log.Logger) {
+					l.Println(
+						"FREEZE while reading from UPSTREAM",
+						opHeader, self.id, time.Now().Sub(opStart), buf,
+					)
+				})
+			go self.closeForced()
 		}
 		opLock.RUnlock()
+		if self.IsClosed() {
+			return
+		}
 		time.AfterFunc(time.Second, opLatencyCheck)
 	}
+
 	opLatencyCheck()
 	for {
 		opLock.Lock()
@@ -406,6 +423,7 @@ func (self *transport) IOLoopReader() error {
 		}
 		cb(job, self)
 	}
+
 	return nil
 }
 
