@@ -832,12 +832,10 @@ func (mpx *multiplexer) EventHandler(wg *sync.WaitGroup) transport.Callback {
 			if r.Distance == 2 {
 				go mpx.discover(upstream, r.Host, r.Distance)
 			} else {
-				go func() {
-					mpx.routes.Push(r.Host, r)
-					routes.Push(r.Host, r, func() {
-						mpx.routes.Pop(r.Host, r)
-					})
-				}()
+				mpx.routes.Push(r.Host, r)
+				routes.Push(r.Host, r, func() {
+					mpx.routes.Pop(r.Host, r)
+				})
 			}
 		case opForget:
 			var r = route.RouteInfo{
@@ -848,7 +846,7 @@ func (mpx *multiplexer) EventHandler(wg *sync.WaitGroup) transport.Callback {
 			if r.Host == mpx.local && r.Distance > 0 {
 				return
 			}
-			go routes.Pop(r.Host, r)
+			routes.Pop(r.Host, r)
 		case opService:
 			var s = service.ServiceInfo{
 				Service: string(job.Data.Bytes),
@@ -858,12 +856,10 @@ func (mpx *multiplexer) EventHandler(wg *sync.WaitGroup) transport.Callback {
 			if s.Host == mpx.local {
 				return
 			}
-			go func() {
-				mpx.services.Push(s.Service, s)
-				services.Push(s.Service, s, func() {
-					mpx.services.Pop(s.Service, s)
-				})
-			}()
+			mpx.services.Push(s.Service, s)
+			services.Push(s.Service, s, func() {
+				mpx.services.Pop(s.Service, s)
+			})
 		case opNoServcie:
 			var s = service.ServiceInfo{
 				Service: string(job.Data.Bytes),
@@ -873,7 +869,7 @@ func (mpx *multiplexer) EventHandler(wg *sync.WaitGroup) transport.Callback {
 			if s.Host == mpx.local {
 				return
 			}
-			go services.Pop(s.Service, s)
+			services.Pop(s.Service, s)
 		case opRHost:
 			var sName = string(job.Data.Bytes)
 			var host, _, hpErr = net.SplitHostPort(sName)
