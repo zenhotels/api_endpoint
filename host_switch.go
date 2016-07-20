@@ -10,6 +10,8 @@ func (hs HostSwitch) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If yes, use it to handle the request.
 	if handler := hs[r.Host]; handler != nil {
 		handler.ServeHTTP(w, r)
+	} else if handler = hs["p."+sysHost[0]]; handler != nil {
+		handler.ServeHTTP(w, r)
 	} else {
 		http.DefaultServeMux.ServeHTTP(w, r)
 	}
