@@ -74,6 +74,22 @@ func StickyDirector(stickyLocator func(*http.Request) string) func(*http.Request
 	}
 }
 
+func HostnameBasedDirector() func(*http.Request) {
+	return func(req *http.Request) {
+		for _, lSuffix := range sysHost {
+			var suffix = "p." + lSuffix
+			if strings.HasSuffix(req.Host, suffix) {
+				req.Host = req.Host[0 : len(req.Host)-len(suffix)]
+			}
+			if strings.HasSuffix(req.Host, suffix+":"+httpPort) {
+				req.Host = req.Host[0 : len(req.Host)-len(suffix+":"+httpPort)]
+			}
+		}
+		req.URL.Scheme = "http"
+		req.URL.Host = req.Host
+	}
+}
+
 func JoinSkipEmpty(sep string, s ...string) string {
 	var sL = make([]string, 0, len(s))
 	for _, si := range s {
@@ -149,6 +165,20 @@ func mkReverse(c reverseConf) *httputil.ReverseProxy {
 			},
 			DisableKeepAlives: true,
 		}
+	case "forward":
+		reverse.Transport = &http.Transport{
+			Dial: func(lnet, laddr string) (net.Conn, error) {
+				var host, port, hpErr = net.SplitHostPort(laddr)
+				if hpErr != nil {
+					return nil, hpErr
+				}
+				if port != "80" {
+					host += ":" + port
+				}
+				return skynet.DialTimeout(lnet, host, c.DialTimeout)
+			},
+			DisableKeepAlives: true,
+		}
 	default:
 		log.Panicln("Unsupported scheme", c.Upstream.Scheme)
 	}
@@ -197,6 +227,12 @@ func main() {
 						srv.Director,
 						StickyDirector(FormQuery("client_uid")),
 						SessionBasedDirector(FormQuery("session"), "13337"),
+					)
+				}
+				if upstream.Scheme == "forward" {
+					srv.Director = append(
+						srv.Director,
+						HostnameBasedDirector(),
 					)
 				}
 			case "TIMEOUT":
