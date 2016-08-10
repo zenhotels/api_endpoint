@@ -1,20 +1,20 @@
-package addr
+package astranet
 
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"errors"
 )
 
 type Addr struct {
-	Net   string
-	VHost uint64
-	VPort uint32
+	network string
+	VHost   uint64
+	VPort   uint32
 }
 
 func (self *Addr) Network() string {
-	return self.Net
+	return self.network
 }
 
 func (self *Addr) String() string {
@@ -22,9 +22,6 @@ func (self *Addr) String() string {
 }
 
 func Uint2Host(h uint64) string {
-	if h == 0 {
-		return "--anyone---"
-	}
 	var src [8]byte
 	binary.BigEndian.PutUint64(src[:], h)
 	return base64.RawURLEncoding.EncodeToString(src[:])
