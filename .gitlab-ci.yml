@@ -32,7 +32,7 @@ push_to_registry:
   script:
     - VERSION=b${CI_BUILD_ID}
     - for i in ${REGISTRYS}; do \
-    - docker tag -f ${build_tag} ${i}/${project}:latest; \
+    - docker tag ${build_tag} ${i}/${project}:latest; \
     - docker tag ${build_tag} ${i}/${project}:$VERSION; \
     - docker push ${i}/${project}:latest; \
     - docker push ${i}/${project}:$VERSION; \
