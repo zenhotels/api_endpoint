@@ -4,42 +4,43 @@
 		{
 			"importpath": "github.com/cenk/backoff",
 			"repository": "https://github.com/cenk/backoff",
-			"vcs": "",
 			"revision": "cdf48bbc1eb78d1349cbda326a4a037f7ba565c6",
 			"branch": "master"
 		},
 		{
+			"importpath": "github.com/joeshaw/gengen/generic",
+			"repository": "https://github.com/joeshaw/gengen",
+			"revision": "a91064a26cca4fa203f59a9b3b0ce850de1c3e16",
+			"branch": "master",
+			"path": "/generic"
+		},
+		{
 			"importpath": "github.com/julienschmidt/httprouter",
 			"repository": "https://github.com/julienschmidt/httprouter",
-			"vcs": "",
 			"revision": "77366a47451a56bb3ba682481eed85b64fea14e8",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/rcrowley/go-metrics",
 			"repository": "https://github.com/rcrowley/go-metrics",
-			"vcs": "",
 			"revision": "cfa5a85e9f0abbdf1701b59082c36fc7bff10759",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/satori/go.uuid",
 			"repository": "https://github.com/satori/go.uuid",
-			"vcs": "",
 			"revision": "879c5887cd475cd7864858769793b2ceb0d44feb",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/stathat/go",
 			"repository": "https://github.com/stathat/go",
-			"vcs": "",
 			"revision": "c828dca0ee6eadc566bfcbcc00e4a992f12821a3",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/stretchr/testify/assert",
 			"repository": "https://github.com/stretchr/testify",
-			"vcs": "",
 			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
 			"branch": "master",
 			"path": "/assert"
@@ -47,7 +48,6 @@
 		{
 			"importpath": "github.com/stretchr/testify/vendor/github.com/davecgh/go-spew/spew",
 			"repository": "https://github.com/stretchr/testify",
-			"vcs": "",
 			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
 			"branch": "master",
 			"path": "vendor/github.com/davecgh/go-spew/spew"
@@ -55,7 +55,6 @@
 		{
 			"importpath": "github.com/stretchr/testify/vendor/github.com/pmezard/go-difflib/difflib",
 			"repository": "https://github.com/stretchr/testify",
-			"vcs": "",
 			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
 			"branch": "master",
 			"path": "vendor/github.com/pmezard/go-difflib/difflib"
@@ -63,10 +62,35 @@
 		{
 			"importpath": "github.com/zenhotels/astranet",
 			"repository": "https://github.com/zenhotels/astranet",
-			"vcs": "git",
-			"revision": "deae049a7e48e42aa324eb9a8580d1dfc40eb11c",
-			"branch": "HEAD",
-			"notests": true
+			"revision": "70806c9050602ef8bb109c917270cf40932da502",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/zenhotels/btree-2d/lockie",
+			"repository": "https://github.com/zenhotels/btree-2d",
+			"revision": "61901d6b1c202c811230766280183784276c9657",
+			"branch": "master",
+			"path": "/lockie"
+		},
+		{
+			"importpath": "github.com/zenhotels/btree-2d/util",
+			"repository": "https://github.com/zenhotels/btree-2d",
+			"revision": "61901d6b1c202c811230766280183784276c9657",
+			"branch": "master",
+			"path": "/util"
+		},
+		{
+			"importpath": "github.com/zenhotels/btree-2d/uuid",
+			"repository": "https://github.com/zenhotels/btree-2d",
+			"revision": "61901d6b1c202c811230766280183784276c9657",
+			"branch": "master",
+			"path": "/uuid"
+		},
+		{
+			"importpath": "stathat.com/c/consistent",
+			"repository": "https://github.com/stathat/consistent",
+			"revision": "748f01b59d1b2218efe39513039e9ee31266d7c7",
+			"branch": "master"
 		}
 	]
 }
