@@ -22,7 +22,7 @@ import (
 	"github.com/zenhotels/astranet/addr"
 )
 
-var skynet = astranet.New()
+var skynet = astranet.New().Router()
 
 type Closer struct {
 	io.Reader
