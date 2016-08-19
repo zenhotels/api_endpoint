@@ -323,6 +323,8 @@ func main() {
 		}
 	}
 
+	http.DefaultServeMux.HandleFunc("/", Index)
+
 	if srvErr := skynet.ListenAndServe("tcp4", "0.0.0.0:"+skyPort); srvErr != nil {
 		log.Panicln(srvErr)
 	}
