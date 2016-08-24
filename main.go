@@ -22,7 +22,7 @@ import (
 	"github.com/zenhotels/astranet/addr"
 )
 
-var skynet = astranet.New().Router()
+var skynet astranet.AstraNet
 
 type Closer struct {
 	io.Reader
@@ -197,6 +197,11 @@ var keyRe = regexp.MustCompilePOSIX("KEY_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
 var stageRe = regexp.MustCompilePOSIX("STAGE_([A-Z0-9_]*)_([A-Z0-9_]*)=(.*)")
 
 func main() {
+	if os.Getenv("MPXROUTER") == "" {
+		skynet = astranet.New().Router()
+	} else {
+		skynet = astranet.New()
+	}
 	if skyPort == "" {
 		skyPort = "10000"
 	}
