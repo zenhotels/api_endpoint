@@ -62,8 +62,8 @@
 		{
 			"importpath": "github.com/zenhotels/astranet",
 			"repository": "https://github.com/zenhotels/astranet",
-			"revision": "3f2368a9fe1e0b706b5376fbaffe2dcfe83f0e22",
-			"branch": "HEAD"
+			"revision": "86c9939390dd95f0b3f120466265b9e5649ae7df",
+			"branch": "master"
 		},
 		{
 			"importpath": "github.com/zenhotels/btree-2d/lockie",
